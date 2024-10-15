@@ -20,3 +20,11 @@ my_data_wh_db=# insert into my_table values('Jack', 25);
 INSERT 0 1
 my_data_wh_db=# insert into my_table values('Linda', 35);
 INSERT 0 1
+
+
+Step #4 — Open browser and access the Grafana
+http://<ip_of_the_host_machine>:3111
+
+Step #5 — Define PostgreSQL data source in Grafana; it will access data from the pg_data_wh PostgreSQL database
+
+Step #6 — Explore the pg_data_wh PostgreSQL data from the Grafana
