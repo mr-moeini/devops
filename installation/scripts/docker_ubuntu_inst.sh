@@ -34,7 +34,7 @@ set -e
 #
 # 1. download the script
 #
-curl -fsSL https://get.docker.com -o install-docker.sh
+# curl -fsSL https://get.docker.com -o install-docker.sh
 #
 # 2. verify the script's content
 #
