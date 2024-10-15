@@ -4,6 +4,8 @@ docker-compose up -d
  ⠿ Container pg_grafana  Started                                                                                          0.9s
  ⠿ Container grafana     Started                                                                                          1.3s
  ⠿ Container pg_data_wh  Started                                                                                          0.9s
+
+
 Step #3 — Connect to the pg_data_wh PostgreSQL database and populate some sample data
 psql -h localhost -p 5488 -U my_data_wh_user -d my_data_wh_db -W
 Password:
