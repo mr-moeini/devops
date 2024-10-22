@@ -1,7 +1,8 @@
 FROM ubuntu:latest
 
 RUN apt update && \
-    apt install -y mysql-server
+    apt install -y mysql-server && \
+apt clean
 
 RUN systemctl start mysql && \
     mysql -e "CREATE USER 'mysqluser'@'%' IDENTIFIED BY 'mysqlpassword';" && \
