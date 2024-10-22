@@ -1,7 +1,7 @@
 FROM ubuntu:latest
-ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt update && apt install -y postgresql postgresql-contrib 
+RUN apt update && apt install -y postgresql postgresql-contrib && \
+apt clean
 
 
 RUN systemctl start postgresql && \
