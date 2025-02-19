@@ -1,0 +1,55 @@
+---
+- name: Install Docker on Target Server
+  hosts: all
+  become: yes
+  tasks:
+
+    - name: Install required packages
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - software-properties-common
+      when: ansible_os_family == "Debian"
+
+    - name: Install required packages
+      yum:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - yum-utils
+        - device-mapper-persistent-data
+        - lvm2
+      when: ansible_os_family == "RedHat"
+
+    - name: Add Docker GPG key (Ubuntu)
+      shell: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+      when: ansible_os_family == "Debian"
+
+    - name: Add Docker repository (Ubuntu)
+      shell: add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+      when: ansible_os_family == "Debian"
+
+    - name: Add Docker repository (CentOS)
+      shell: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+      when: ansible_os_family == "RedHat"
+
+    - name: Install Docker
+      package:
+        name: docker-ce
+        state: present
+
+    - name: Start and enable Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add user to the docker group
+      user:
+        name: "{{ ansible_user_id }}"
+        groups: docker
+        append: yes
