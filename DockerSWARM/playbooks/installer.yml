@@ -1,0 +1,138 @@
+---
+# Play 1: Prompt user for server list and build a dynamic inventory
+- name: Build dynamic inventory from user input
+  hosts: localhost
+  gather_facts: no
+  vars_prompt:
+    - name: "server_list"
+      prompt: >
+        Enter server list in format ip:role separated by comma 
+        (e.g., 192.168.1.10:master,192.168.1.11:worker,192.168.1.12:both)
+      private: no
+  tasks:
+    - name: Split the server list into an array
+      set_fact:
+        servers: "{{ server_list.split(',') }}"
+
+    - name: Add all servers to the 'swarm' group with their role
+      add_host:
+        name: "{{ item.split(':')[0] }}"
+        ansible_host: "{{ item.split(':')[0] }}"
+        swarm_role: "{{ item.split(':')[1] }}"
+        groups: swarm
+      loop: "{{ servers }}"
+
+    - name: Add servers with role master or both to 'swarm_master' group
+      add_host:
+        name: "{{ item.split(':')[0] }}"
+        groups: swarm_master
+      when: item.split(':')[1] in ['master', 'both']
+      loop: "{{ servers }}"
+
+    - name: Add servers with role worker to 'swarm_worker' group
+      add_host:
+        name: "{{ item.split(':')[0] }}"
+        groups: swarm_worker
+      when: item.split(':')[1] == 'worker'
+      loop: "{{ servers }}"
+
+---
+
+# Play 2: Install Docker and configure SSH key-based login on all swarm hosts
+- name: Install Docker and set up SSH keys
+  hosts: swarm
+  become: yes
+  tasks:
+    - name: Update apt cache and install prerequisites
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+        state: present
+        update_cache: yes
+
+    - name: Add Docker's official GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Install Docker CE
+      apt:
+        name: docker-ce
+        state: latest
+        update_cache: yes
+
+    - name: Ensure Docker service is running and enabled
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Copy SSH public key for passwordless SSH
+      authorized_key:
+        user: "{{ ansible_user }}"
+        state: present
+        key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+
+---
+
+# Play 3: Initialize Docker Swarm on one master and gather join tokens
+- name: Initialize Docker Swarm on primary master
+  hosts: swarm_master[0]
+  become: yes
+  tasks:
+    - name: Initialize Docker Swarm (if not already initialized)
+      shell: "docker swarm init --advertise-addr {{ ansible_host }}"
+      args:
+        creates: /var/lib/docker/swarm
+      register: swarm_init
+
+    - name: Get the worker join token
+      shell: "docker swarm join-token -q worker"
+      register: worker_token
+
+    - name: Get the manager join token
+      shell: "docker swarm join-token -q manager"
+      register: manager_token
+
+    - name: Set join tokens and manager IP as facts on primary master
+      set_fact:
+        swarm_worker_token: "{{ worker_token.stdout }}"
+        swarm_manager_token: "{{ manager_token.stdout }}"
+        manager_ip: "{{ ansible_host }}"
+
+---
+
+# Play 4: Join additional masters (if any) to the swarm as managers
+- name: Join additional master nodes to the swarm
+  hosts: swarm_master
+  become: yes
+  tasks:
+    - name: Join swarm as manager (skip for primary master)
+      shell: >
+        docker swarm join --token {{ hostvars[groups['swarm_master'][0]].swarm_manager_token }}
+        {{ hostvars[groups['swarm_master'][0]].manager_ip }}:2377
+      args:
+        creates: /var/lib/docker/swarm
+      when: inventory_hostname != groups['swarm_master'][0]
+
+---
+
+# Play 5: Join worker nodes to the swarm
+- name: Join worker nodes to the swarm
+  hosts: swarm_worker
+  become: yes
+  tasks:
+    - name: Join swarm as worker
+      shell: >
+        docker swarm join --token {{ hostvars[groups['swarm_master'][0]].swarm_worker_token }}
+        {{ hostvars[groups['swarm_master'][0]].manager_ip }}:2377
+      args:
+        creates: /var/lib/docker/swarm
